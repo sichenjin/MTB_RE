@@ -10,15 +10,17 @@ from collections import Counter
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
 import transformers 
 from transformers import (
-BertForSequenceClassification,
 BertTokenizer,
 BertAdam
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
+
+from BertForMTB import BertForMTB
 # print(transformers.__version__)
 
 
@@ -27,16 +29,16 @@ SEP = "[SEP]"
 logger = logging.getLogger(__name__)
 
 
+
+
 class InputExample(object):
 """A single training/test example for span pair classification."""
 
-    def __init__(self, guid, sentence, span1, span2, ner1, ner2, label):
+    def __init__(self, guid, x, span1, span2, label):
         self.guid = guid
-        self.sentence = sentence
+        self.x = x
         self.span1 = span1
         self.span2 = span2
-        self.ner1 = ner1
-        self.ner2 = ner2
         self.label = label
 
 class InputFeatures(object):
@@ -57,27 +59,27 @@ class DataProcessor(object):
             data = json.load(reader)
         return data
 
-    def get_train_examples(self, data_dir):
+    def get_train_examples(self, data_dir,tokenizer):
         """See base class."""
         return self._create_examples(
-            self._read_json(os.path.join(data_dir, "train.json")), "train")
+            self._read_json(os.path.join(data_dir, "train.json")),tokenizer, "train")
 
-    def get_dev_examples(self, data_dir):
+    def get_dev_examples(self, data_dir,tokenizer):
         """See base class."""
         return self._create_examples(
-            self._read_json(os.path.join(data_dir, "dev.json")), "dev")
+            self._read_json(os.path.join(data_dir, "dev.json")),tokenizer, "dev")
 
-    def get_test_examples(self, data_dir):
+    def get_test_examples(self, data_dir,tokenizer):
         """See base class."""
         return self._create_examples(
-            self._read_json(os.path.join(data_dir, "test.json")), "test")
+            self._read_json(os.path.join(data_dir, "test.json")),tokenizer, "test")
 
-    def get_labels(self, data_dir, negative_label="no_relation"):
+    def get_labels(self, data_dir, negative_label="NA"):
         """See base class."""
         dataset = self._read_json(os.path.join(data_dir, "train.json"))
         count = Counter()
         for example in dataset:
-            count[example['relation']] += 1
+            count[example['label']] += 1   
         logger.info("%d labels" % len(count))
         # Make sure the negative label is alwyas 0
         labels = [negative_label]
@@ -87,32 +89,48 @@ class DataProcessor(object):
                 labels.append(label)
         return labels
 
-    def _create_examples(self, dataset, set_type):
+    def _create_examples(self, dataset, tokenizer, set_type):
         """Creates examples for the training and dev sets."""
+        #Convert the span index from string index to token index   
+        
+        def find_span_token(sl,l):
+            sll=len(sl)
+            for ind in (i for i,e in enumerate(l) if e==sl[0]):
+                if l[ind:ind+sll]==sl:
+                    return ind,ind+sll-1
+
         examples = []
-        for example in dataset:
-            sentence = [convert_token(token) for token in example['token']]
-            assert example['subj_start'] >= 0 and example['subj_start'] <= example['subj_end'] \
-                and example['subj_end'] < len(sentence)
-            assert example['obj_start'] >= 0 and example['obj_start'] <= example['obj_end'] \
-                and example['obj_end'] < len(sentence)
-            examples.append(InputExample(guid=example['id'],
-                             sentence=sentence,
-                             span1=(example['subj_start'], example['subj_end']),
-                             span2=(example['obj_start'], example['obj_end']),
-                             ner1=example['subj_type'],
-                             ner2=example['obj_type'],
-                             label=example['relation']))
+        for (ex_index, example) in enumerate(dataset):
+            assert len(example['ents']) == 2
+            #example['ents'][0][1]: subject start ;
+            #example['ents'][0][2]: subject end ;
+            #example['ents'][1][1]: object start ;
+            #example['ents'][1][2]: object end ;
+            #span index start from 1 in the dataset 
+            assert example['ents'][0][1]-1 >= 0 and example['ents'][0][1] <= example['ents'][0][2] \
+                and example['ents'][0][2]-1 < len(example['text'])
+            assert example['ents'][1][1]-1 >= 0 and example['ents'][1][1] <= example['ents'][1][2] \
+                and example['ents'][1][2]-1 < len(example['text']) 
+            tokens = tokenizer.tokenize(example['text']) 
+            sub_tokens = tokenizer.tokenize(example['ents'][0][0]) 
+            obj_tokens = tokenizer.tokenize(example['ents'][1][0]) 
+            span1 = find_span_token(sub_tokens,tokens)
+            span2 = find_span_token(obj_tokens,tokens)
+            examples.append(InputExample(guid=ex_index,
+                             x = tokens,
+                             span1=span1,
+                             span2=span2,
+                             label=example['label']))
         return examples
 
 
-def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, special_tokens, mode='text'):
+def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, special_tokens, mode):
     """Loads a data file into a list of `InputBatch`s."""
-
+    
 
     def get_special_token(w):
         if w not in special_tokens:
-            special_tokens[w] = "[unused%d]" % (len(special_tokens) + 1)
+            special_tokens[w] = " [unused%d] " % (len(special_tokens) + 1)  
         return special_tokens[w]
 
     num_tokens = 0
@@ -128,49 +146,33 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
         SUBJECT_END = get_special_token("SUBJ_END")
         OBJECT_START = get_special_token("OBJ_START")
         OBJECT_END = get_special_token("OBJ_END")
-        SUBJECT_NER = get_special_token("SUBJ=%s" % example.ner1)
-        OBJECT_NER = get_special_token("OBJ=%s" % example.ner2)
 
-        if mode.startswith("text"):
-            for i, token in enumerate(example.sentence):
-                if i == example.span1[0]:
+        if mode == "standard":
+            tokens = example.x
+            tokens.append(SEP)
+        elif mode == "position":
+            for i, token in enumerate(example.x):  
+                if i == example.span1[0]:    
+                    tokens.append(SEP)
+                if i == example.span2[0]:
+                    tokens.append(SEP)
+                tokens.append(token)
+                if i == example.span1[1]:
+                    tokens.append(SEP)
+                if i == example.span2[1]:
+                    tokens.append(SEP)
+            tokens.append(SEP)
+        else:    #entity mode 
+            for i, token in enumerate(example.x):  
+                if i == example.span1[0]:    
                     tokens.append(SUBJECT_START)
                 if i == example.span2[0]:
                     tokens.append(OBJECT_START)
-                for sub_token in tokenizer.tokenize(token):
-                    tokens.append(sub_token)
+                tokens.append(token)
                 if i == example.span1[1]:
                     tokens.append(SUBJECT_END)
                 if i == example.span2[1]:
                     tokens.append(OBJECT_END)
-            if mode == "text_ner":
-                tokens = tokens + [SEP, SUBJECT_NER, SEP, OBJECT_NER, SEP]
-            else:
-                tokens.append(SEP)
-        else:
-            subj_tokens = []
-            obj_tokens = []
-            for i, token in enumerate(example.sentence):
-                if i == example.span1[0]:
-                    tokens.append(SUBJECT_NER)
-                if i == example.span2[0]:
-                    tokens.append(OBJECT_NER)
-                if (i >= example.span1[0]) and (i <= example.span1[1]):
-                    for sub_token in tokenizer.tokenize(token):
-                        subj_tokens.append(sub_token)
-                elif (i >= example.span2[0]) and (i <= example.span2[1]):
-                    for sub_token in tokenizer.tokenize(token):
-                        obj_tokens.append(sub_token)
-                else:
-                    for sub_token in tokenizer.tokenize(token):
-                        tokens.append(sub_token)
-            if mode == "ner_text":
-                tokens.append(SEP)
-                for sub_token in subj_tokens:
-                    tokens.append(sub_token)
-                tokens.append(SEP)
-                for sub_token in obj_tokens:
-                    tokens.append(sub_token)
             tokens.append(SEP)
         num_tokens += len(tokens)
 
@@ -327,7 +329,7 @@ def main(args):
 
     special_tokens = {}
     if args.do_eval:
-        eval_examples = processor.get_dev_examples(args.data_dir)
+        eval_examples = processor.get_dev_examples(args.data_dir, tokenizer)
         eval_features = convert_examples_to_features(
             eval_examples, label2id, args.max_seq_length, tokenizer, special_tokens, args.feature_mode)
         logger.info("***** Dev *****")
@@ -342,7 +344,7 @@ def main(args):
         eval_label_ids = all_label_ids
 
     if args.do_train:
-        train_examples = processor.get_train_examples(args.data_dir)
+        train_examples = processor.get_train_examples(args.data_dir,tokenizer)
         train_features = convert_examples_to_features(
                 train_examples, label2id, args.max_seq_length, tokenizer, special_tokens, args.feature_mode)
 
@@ -372,8 +374,9 @@ def main(args):
         lrs = [args.learning_rate] if args.learning_rate else \
             [1e-6, 2e-6, 3e-6, 5e-6, 1e-5, 2e-5, 3e-5, 5e-5]
         for lr in lrs:
-            model = BertForSequenceClassification.from_pretrained(
-                args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels)
+            model =BertForMTB(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            # BertForSequenceClassification.from_pretrained(
+                # args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels,examples = train_examples)
             if args.fp16:
                 model.half()
             model.to(device)
@@ -488,7 +491,7 @@ def main(args):
 
     if args.do_eval:
         if args.eval_test:
-            eval_examples = processor.get_test_examples(args.data_dir)
+            eval_examples = processor.get_test_examples(args.data_dir, tokenizer)
             eval_features = convert_examples_to_features(
                 eval_examples, label2id, args.max_seq_length, tokenizer, special_tokens, args.feature_mode)
             logger.info("***** Test *****")
@@ -501,7 +504,8 @@ def main(args):
             eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
             eval_dataloader = DataLoader(eval_data, batch_size=args.eval_batch_size)
             eval_label_ids = all_label_ids
-        model = BertForSequenceClassification.from_pretrained(args.output_dir, num_labels=num_labels)
+        model = BertForMTB(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = eval_examples,mode = args.repre_mode)
+        # from_pretrained(args.output_dir, num_labels=num_labels)
         if args.fp16:
             model.half()
         model.to(device)
@@ -527,13 +531,14 @@ if __name__ == "__main__":
                         help="The maximum total input sequence length after WordPiece tokenization. \n"
                              "Sequences longer than this will be truncated, and sequences shorter \n"
                              "than this will be padded.")
-    parser.add_argument("--negative_label", default="no_relation", type=str)
+    parser.add_argument("--negative_label", default="NA", type=str)
     parser.add_argument("--do_train", action='store_true', help="Whether to run training.")
     parser.add_argument("--train_mode", type=str, default='random_sorted', choices=['random', 'sorted', 'random_sorted'])
     parser.add_argument("--do_eval", action='store_true', help="Whether to run eval on the dev set.")
     parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
     parser.add_argument("--eval_test", action="store_true", help="Whether to evaluate on final test set.")
-    parser.add_argument("--feature_mode", type=str, default="ner", choices=["text", "ner", "text_ner", "ner_text"])
+    parser.add_argument("--feature_mode", type=str, default="standard", choices=["standard", "position", "entity"])
+    parser.add_argument("--repre_mode", type=str, default="standard", choices=["standard", "position", "entity"])
     parser.add_argument("--train_batch_size", default=32, type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size", default=8, type=int,

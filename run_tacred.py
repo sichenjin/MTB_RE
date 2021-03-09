@@ -55,6 +55,7 @@ class DataProcessor(object):
 
     @classmethod
     def _read_json(cls, input_file):
+        print('read...')
         with open(input_file, "r", encoding='utf-8') as reader:
             data = json.load(reader)
         return data
@@ -565,3 +566,4 @@ if __name__ == "__main__":
                              "0 (default value): dynamic loss scaling.\n"
                              "Positive power of 2: static loss scaling value.\n")
     args = parser.parse_args()
+    main(args)

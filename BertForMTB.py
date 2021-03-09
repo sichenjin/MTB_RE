@@ -1,5 +1,7 @@
 from pytorch_transformers.modeling_bert import BertPreTrainedModel
 from transformers import BertModel
+import torch
+from transformers.modeling_outputs import SequenceClassifierOutput
 # from .file_utils import (
 #     ModelOutput,
 #     add_code_sample_docstrings,
@@ -7,6 +9,11 @@ from transformers import BertModel
 #     add_start_docstrings_to_model_forward,
 #     replace_return_docstrings,
 # )
+
+# _TOKENIZER_FOR_DOC = "BertTokenizer"
+# _CONFIG_FOR_DOC = "BertConfig"
+
+
 
 class BertForMTB(BertPreTrainedModel):
     def __init__(self, config, model_name,examples,mode):

@@ -1,8 +1,17 @@
 from pytorch_transformers.modeling_bert import BertPreTrainedModel
+from transformers import BertModel
+from .file_utils import (
+    ModelOutput,
+    add_code_sample_docstrings,
+    add_start_docstrings,
+    add_start_docstrings_to_model_forward,
+    replace_return_docstrings,
+)
 
 class BertForMTB(BertPreTrainedModel):
     def __init__(self, config,num_labels,examples,mode):
         super().__init__(config)
+        # super(BertForMTB, self).__init__(config)
         self.num_labels = num_labels
         # config.num_labels
 

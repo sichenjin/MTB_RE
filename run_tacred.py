@@ -14,6 +14,8 @@ import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
 import transformers 
+
+from pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE, WEIGHTS_NAME, CONFIG_NAME
 from pytorch_pretrained_bert.optimization import BertAdam
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_transformers.modeling_bert import BertPreTrainedModel
@@ -375,7 +377,7 @@ def main(args):
         lrs = [args.learning_rate] if args.learning_rate else \
             [1e-6, 2e-6, 3e-6, 5e-6, 1e-5, 2e-5, 3e-5, 5e-5]
         for lr in lrs:
-            model =BertForMTB(args.model ,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            model =BertForMTB.from_pretrained(args.model ,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
             # BertForSequenceClassification.from_pretrained(
                 # args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels,examples = train_examples)
             if args.fp16:
@@ -506,7 +508,7 @@ def main(args):
             eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
             eval_dataloader = DataLoader(eval_data, batch_size=args.eval_batch_size)
             eval_label_ids = all_label_ids
-        model = BertForMTB(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = eval_examples,mode = args.repre_mode)
+        model = BertForMTB.from_pretrained(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = eval_examples,mode = args.repre_mode)
         # from_pretrained(args.output_dir, num_labels=num_labels)
         if args.fp16:
             model.half()

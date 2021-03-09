@@ -377,7 +377,7 @@ def main(args):
         lrs = [args.learning_rate] if args.learning_rate else \
             [1e-6, 2e-6, 3e-6, 5e-6, 1e-5, 2e-5, 3e-5, 5e-5]
         for lr in lrs:
-            model =BertForMTB.from_pretrained(args.model ,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            model =BertForMTB.from_pretrained(args.model ,model_name = args.model,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
             # BertForSequenceClassification.from_pretrained(
                 # args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels,examples = train_examples)
             if args.fp16:
@@ -508,7 +508,7 @@ def main(args):
             eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
             eval_dataloader = DataLoader(eval_data, batch_size=args.eval_batch_size)
             eval_label_ids = all_label_ids
-        model = BertForMTB.from_pretrained(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = eval_examples,mode = args.repre_mode)
+        model = BertForMTB.from_pretrained(args.model,model_name = args.model,num_labels=num_labels,examples = eval_examples,mode = args.repre_mode)
         # from_pretrained(args.output_dir, num_labels=num_labels)
         if args.fp16:
             model.half()
@@ -542,7 +542,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_lower_case", action='store_true', help="Set this flag if you are using an uncased model.")
     parser.add_argument("--eval_test", action="store_true", help="Whether to evaluate on final test set.")
     parser.add_argument("--feature_mode", type=str, default="standard", choices=["standard", "position", "entity"])
-    parser.add_argument("--repre_mode", type=str, default="standard", choices=["standard", "position", "entity"])
+    parser.add_argument("--repre_mode", type=str, default="CLS", choices=["CLS", "pooling", "start"])
     parser.add_argument("--train_batch_size", default=32, type=int,
                         help="Total batch size for training.")
     parser.add_argument("--eval_batch_size", default=8, type=int,

@@ -1,21 +1,21 @@
 from pytorch_transformers.modeling_bert import BertPreTrainedModel
 from transformers import BertModel
-from .file_utils import (
-    ModelOutput,
-    add_code_sample_docstrings,
-    add_start_docstrings,
-    add_start_docstrings_to_model_forward,
-    replace_return_docstrings,
-)
+# from .file_utils import (
+#     ModelOutput,
+#     add_code_sample_docstrings,
+#     add_start_docstrings,
+#     add_start_docstrings_to_model_forward,
+#     replace_return_docstrings,
+# )
 
 class BertForMTB(BertPreTrainedModel):
-    def __init__(self, config,num_labels,examples,mode):
+    def __init__(self, config, model_name,examples,mode):
+        print(mode)
         super().__init__(config)
         # super(BertForMTB, self).__init__(config)
-        self.num_labels = num_labels
+        self.num_labels = config.num_labels
         # config.num_labels
-
-        self.bert = BertModel(config)
+        self.bert = BertModel.from_pretrained(model_name)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
         self.classifier2 = nn.Linear(2*config.hidden_size, config.num_labels)

@@ -14,10 +14,10 @@ import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 
 import transformers 
-from transformers import (
-BertTokenizer,
-BertAdam
-)
+from pytorch_pretrained_bert.optimization import BertAdam
+from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_transformers.modeling_bert import BertPreTrainedModel
+
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
 from BertForMTB import BertForMTB
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class InputExample(object):
-"""A single training/test example for span pair classification."""
+    """A single training/test example for span pair classification."""
 
     def __init__(self, guid, x, span1, span2, label):
         self.guid = guid
@@ -374,10 +374,11 @@ def main(args):
         lrs = [args.learning_rate] if args.learning_rate else \
             [1e-6, 2e-6, 3e-6, 5e-6, 1e-5, 2e-5, 3e-5, 5e-5]
         for lr in lrs:
-            model =BertForMTB(args.model,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            model =BertForMTB(args.model ,cache_dir = str(PYTORCH_PRETRAINED_BERT_CACHE),num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
             # BertForSequenceClassification.from_pretrained(
                 # args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels,examples = train_examples)
             if args.fp16:
+
                 model.half()
             model.to(device)
             if n_gpu > 1:

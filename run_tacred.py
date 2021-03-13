@@ -377,7 +377,8 @@ def main(args):
         lrs = [args.learning_rate] if args.learning_rate else \
             [1e-6, 2e-6, 3e-6, 5e-6, 1e-5, 2e-5, 3e-5, 5e-5]
         for lr in lrs:
-            model =BertForMTB.from_pretrained(args.model ,model_name = args.model,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            model = BertForMTB.from_pretrained(args.model,model_name = args.model,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
+            # BertForMTB.from_pretrained(args.model ,model_name = args.model,num_labels=num_labels,examples = train_examples,mode = args.repre_mode)
             # BertForSequenceClassification.from_pretrained(
                 # args.model, cache_dir=str(PYTORCH_PRETRAINED_BERT_CACHE), num_labels=num_labels,examples = train_examples)
             if args.fp16:

@@ -1,14 +1,15 @@
 from pytorch_transformers.modeling_bert import BertPreTrainedModel
 from transformers import BertModel
 import torch
+import torch.nn as nn
 from transformers.modeling_outputs import SequenceClassifierOutput
-# from .file_utils import (
-#     ModelOutput,
-#     add_code_sample_docstrings,
-#     add_start_docstrings,
-#     add_start_docstrings_to_model_forward,
-#     replace_return_docstrings,
-# )
+from transformers.file_utils import (
+    ModelOutput,
+    add_code_sample_docstrings,
+    add_start_docstrings,
+    add_start_docstrings_to_model_forward,
+    replace_return_docstrings,
+)
 
 # _TOKENIZER_FOR_DOC = "BertTokenizer"
 # _CONFIG_FOR_DOC = "BertConfig"
@@ -16,12 +17,11 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 class BertForMTB(BertPreTrainedModel):
-    def __init__(self, config, model_name,examples,mode):
+    def __init__(self,config, model_name,examples,mode):
         print(mode)
         super().__init__(config)
         # super(BertForMTB, self).__init__(config)
         self.num_labels = config.num_labels
-        # config.num_labels
         self.bert = BertModel.from_pretrained(model_name)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifier = nn.Linear(config.hidden_size, config.num_labels)
@@ -73,7 +73,6 @@ class BertForMTB(BertPreTrainedModel):
         if mode == 'CLS':
 
             # pooled_output = outputs[1]
-
             # pooled_output = self.dropout(pooled_output)
             CLS_hidden_states = torch.squeeze(hidden_states[-1][:,0] , dim=1)  #squeeze sequence length dim
             CLS_hidden_states = self.dropout(CLS_hidden_states)

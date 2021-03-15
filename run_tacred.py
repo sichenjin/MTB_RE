@@ -46,11 +46,12 @@ class InputExample(object):
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, input_ids, input_mask, segment_ids, label_id):
+    def __init__(self, input_ids, input_mask, segment_ids, label_id,span_id):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
         self.label_id = label_id
+        self.span_id = span_id
 
 class DataProcessor(object):
     """Processor for the TACRED data set."""
@@ -117,7 +118,7 @@ class DataProcessor(object):
             tokens = tokenizer.tokenize(example['text']) 
             sub_tokens = tokenizer.tokenize(example['ents'][0][0]) 
             obj_tokens = tokenizer.tokenize(example['ents'][1][0]) 
-            span1 = find_span_token(sub_tokens,tokens)
+            span1 = find_span_token(sub_tokens,tokens) #tuple 
             span2 = find_span_token(obj_tokens,tokens)
             examples.append(InputExample(guid=ex_index,
                              x = tokens,
@@ -191,7 +192,11 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
         input_ids += padding
         input_mask += padding
         segment_ids += padding
+        
         label_id = label2id[example.label]
+        span_id = [example.span1,example.span2] #list of tuple 
+
+
         assert len(input_ids) == max_seq_length
         assert len(input_mask) == max_seq_length
         assert len(segment_ids) == max_seq_length
@@ -212,7 +217,8 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
                 InputFeatures(input_ids=input_ids,
                               input_mask=input_mask,
                               segment_ids=segment_ids,
-                              label_id=label_id))
+                              label_id=label_id,
+                              span_id = span_id)
     logger.info("Average #tokens: %.2f" % (num_tokens * 1.0 / len(examples)))
     logger.info("%d (%.2f %%) examples can fit max_seq_length = %d" % (num_fit_examples,
                 num_fit_examples * 100.0 / len(examples), max_seq_length))
@@ -266,13 +272,14 @@ def evaluate(model, device, eval_dataloader, eval_label_ids, num_labels, verbose
     eval_loss = 0
     nb_eval_steps = 0
     preds = []
-    for input_ids, input_mask, segment_ids, label_ids in eval_dataloader:
+    for input_ids, input_mask, segment_ids, label_ids, span_ids in eval_dataloader:
         input_ids = input_ids.to(device)
         input_mask = input_mask.to(device)
         segment_ids = segment_ids.to(device)
         label_ids = label_ids.to(device)
+        span_ids = span_ids.to(device)
         with torch.no_grad():
-            logits = model(input_ids, segment_ids, input_mask, labels=None)
+            logits = model(input_ids, segment_ids, input_mask, labels=None, span_ids = span_ids)
         loss_fct = CrossEntropyLoss()
         tmp_eval_loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
         eval_loss += tmp_eval_loss.mean().item()
@@ -342,7 +349,8 @@ def main(args):
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
         all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        all_span_ids = torch.tensor([f.span_id for f in eval_features], dtype=torch.long)
+        eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids,all_span_ids)
         eval_dataloader = DataLoader(eval_data, batch_size=args.eval_batch_size)
         eval_label_ids = all_label_ids
 
@@ -360,7 +368,9 @@ def main(args):
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
         all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+        all_span_ids = torch.tensor([f.span_id for f in train_features], dtype=torch.long)
+
+        train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids,all_span_ids)
         train_dataloader = DataLoader(train_data, batch_size=args.train_batch_size)
         train_batches = [batch for batch in train_dataloader]
 
@@ -431,8 +441,8 @@ def main(args):
                     random.shuffle(train_batches)
                 for step, batch in enumerate(train_batches):
                     batch = tuple(t.to(device) for t in batch)
-                    input_ids, input_mask, segment_ids, label_ids = batch
-                    loss = model(input_ids, segment_ids, input_mask, label_ids)
+                    input_ids, input_mask, segment_ids, label_ids, span_ids = batch
+                    loss = model(input_ids, segment_ids, input_mask, label_ids,span_ids)
                     if n_gpu > 1:
                         loss = loss.mean()
                     if args.gradient_accumulation_steps > 1:
@@ -506,6 +516,7 @@ def main(args):
             all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
             all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
             all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
+            all_span_ids = torch.tensor([f.span_id for f in eval_features], dtype=torch.long)
             eval_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
             eval_dataloader = DataLoader(eval_data, batch_size=args.eval_batch_size)
             eval_label_ids = all_label_ids

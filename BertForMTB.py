@@ -11,8 +11,57 @@ from transformers.file_utils import (
     replace_return_docstrings,
 )
 
-# _TOKENIZER_FOR_DOC = "BertTokenizer"
-# _CONFIG_FOR_DOC = "BertConfig"
+_TOKENIZER_FOR_DOC = "BertTokenizer"
+_CONFIG_FOR_DOC = "BertConfig"
+BERT_INPUTS_DOCSTRING = r"""
+    Args:
+        input_ids (:obj:`torch.LongTensor` of shape :obj:`({0})`):
+            Indices of input sequence tokens in the vocabulary.
+
+            Indices can be obtained using :class:`~transformers.BertTokenizer`. See
+            :meth:`transformers.PreTrainedTokenizer.encode` and :meth:`transformers.PreTrainedTokenizer.__call__` for
+            details.
+
+            `What are input IDs? <../glossary.html#input-ids>`__
+        attention_mask (:obj:`torch.FloatTensor` of shape :obj:`({0})`, `optional`):
+            Mask to avoid performing attention on padding token indices. Mask values selected in ``[0, 1]``:
+
+            - 1 for tokens that are **not masked**,
+            - 0 for tokens that are **masked**.
+
+            `What are attention masks? <../glossary.html#attention-mask>`__
+        token_type_ids (:obj:`torch.LongTensor` of shape :obj:`({0})`, `optional`):
+            Segment token indices to indicate first and second portions of the inputs. Indices are selected in ``[0,
+            1]``:
+
+            - 0 corresponds to a `sentence A` token,
+            - 1 corresponds to a `sentence B` token.
+
+            `What are token type IDs? <../glossary.html#token-type-ids>`_
+        position_ids (:obj:`torch.LongTensor` of shape :obj:`({0})`, `optional`):
+            Indices of positions of each input sequence tokens in the position embeddings. Selected in the range ``[0,
+            config.max_position_embeddings - 1]``.
+
+            `What are position IDs? <../glossary.html#position-ids>`_
+        head_mask (:obj:`torch.FloatTensor` of shape :obj:`(num_heads,)` or :obj:`(num_layers, num_heads)`, `optional`):
+            Mask to nullify selected heads of the self-attention modules. Mask values selected in ``[0, 1]``:
+
+            - 1 indicates the head is **not masked**,
+            - 0 indicates the head is **masked**.
+
+        inputs_embeds (:obj:`torch.FloatTensor` of shape :obj:`({0}, hidden_size)`, `optional`):
+            Optionally, instead of passing :obj:`input_ids` you can choose to directly pass an embedded representation.
+            This is useful if you want more control over how to convert :obj:`input_ids` indices into associated
+            vectors than the model's internal embedding lookup matrix.
+        output_attentions (:obj:`bool`, `optional`):
+            Whether or not to return the attentions tensors of all attention layers. See ``attentions`` under returned
+            tensors for more detail.
+        output_hidden_states (:obj:`bool`, `optional`):
+            Whether or not to return the hidden states of all layers. See ``hidden_states`` under returned tensors for
+            more detail.
+        return_dict (:obj:`bool`, `optional`):
+            Whether or not to return a :class:`~transformers.file_utils.ModelOutput` instead of a plain tuple.
+"""
 
 
 
@@ -49,6 +98,7 @@ class BertForMTB(BertPreTrainedModel):
         output_attentions=None,
         output_hidden_states=None,
         return_dict=None,
+        span_ids = None
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -81,11 +131,11 @@ class BertForMTB(BertPreTrainedModel):
 
         elif mode == 'pooling':
             repre_hidden = []
-            for example in examples:
-                maxpool1 = nn.MaxPool1d(example.span1[1]- example.span1[0] + 1)
-                maxpool2 = nn.MaxPool1d(example.span2[1]- example.span2[0] + 1)
-                h_e1_0 = hidden_states[-1][example.guid, example.span1[0]:example.span1[1]+1]
-                h_e2_0 = hidden_states[-1][example.guid, example.span2[0]:example.span2[1]+1]
+            for  span_index,span_id in enumerate(span_ids):
+                maxpool1 = nn.MaxPool1d(span_id[0][1]- span_id[0][0] + 1)
+                maxpool2 = nn.MaxPool1d(span_id[1][1]- span_id[1][0] + 1)
+                h_e1_0 = hidden_states[-1][span_index, span_id[0][0]:span_id[0][1]+1]
+                h_e2_0 = hidden_states[-1][span_index, span_id[1][0]:span_id[1][1]+1]
                 h_e1 = maxpool1(h_e1_0)
                 h_e2 = maxpool2(h_e2_0)
                 hr =  torch.cat([h_e1,h_e2],dim = 0)
@@ -98,9 +148,9 @@ class BertForMTB(BertPreTrainedModel):
           
         else: # start state 
             repre_hidden = []
-            for example in examples:
-                hi = hidden_states[-1][example.guid, example.span1[0]]
-                hj_2 = hidden_states[-1][example.guid, example.span2[0]]
+            for  span_index,span_id in enumerate(span_ids):
+                hi = hidden_states[-1][span_index, span_id[0][0]]
+                hj_2 = hidden_states[-1][span_index, span_id[1][0]]
                 hr =  torch.cat([hi,hj_2],dim = 0)
                 hr.unsqueeze_(1)
                 repre_hidden.append(hr)

@@ -7,6 +7,7 @@ import json
 from collections import Counter
 
 
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -192,6 +193,7 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
 
         if len(tokens) > max_seq_length:
             tokens = tokens[:max_seq_length]
+            segment_ids = segment_ids[:max_seq_length]
         else:
             num_fit_examples += 1
 
@@ -227,7 +229,7 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
                               input_mask=input_mask,
                               segment_ids=segment_ids,
                               label_id=label_id,
-                              span_id = span_id)
+                              span_id = span_id))
     logger.info("Average #tokens: %.2f" % (num_tokens * 1.0 / len(examples)))
     logger.info("%d (%.2f %%) examples can fit max_seq_length = %d" % (num_fit_examples,
                 num_fit_examples * 100.0 / len(examples), max_seq_length))
@@ -417,8 +419,10 @@ def main(args):
             ]
             if args.fp16:
                 try:
-                    from apex.optimizers import FP16_Optimizer
-                    from apex.optimizers import FusedAdam
+                    # from apex.optimizers import FP16_Optimizer
+                    # from apex.optimizers import FusedAdam
+                    from apex.contrib.optimizers import FP16_Optimizer
+                    from apex.contrib.optimizers import FusedAdam
                 except ImportError:
                     raise ImportError("Please install apex from https://www.github.com/nvidia/apex"
                                       "to use distributed and fp16 training.")

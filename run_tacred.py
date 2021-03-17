@@ -154,18 +154,26 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
         if mode == "standard":
             tokens = example.x
             tokens.append(SEP)
+            segment_ids = [0] * len(tokens)
         elif mode == "position":
-            for i, token in enumerate(example.x):  
-                if i == example.span1[0]:    
-                    tokens.append(SEP)
-                if i == example.span2[0]:
-                    tokens.append(SEP)
-                tokens.append(token)
-                if i == example.span1[1]:
-                    tokens.append(SEP)
-                if i == example.span2[1]:
-                    tokens.append(SEP)
+            tokens = example.x
             tokens.append(SEP)
+            segment_ids = [0] * len(tokens)
+            for i in range(span1[0], span1[1]+1): 
+                segment_ids[i] = 1
+            for i in range(span2[0], span2[1]+1): 
+                segment_ids[i] = 2
+            # for i, token in enumerate(tokens): 
+            #     if i == example.span1[0]:    
+            #         tokens.append(SEP)
+            #     if i == example.span2[0]:
+            #         tokens.append(SEP)
+            #     tokens.append(token)
+            #     if i == example.span1[1]:
+            #         tokens.append(SEP)
+            #     if i == example.span2[1]:
+            #         tokens.append(SEP)
+            # tokens.append(SEP)
         else:    #entity mode 
             for i, token in enumerate(example.x):  
                 if i == example.span1[0]:    
@@ -178,6 +186,8 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
                 if i == example.span2[1]:
                     tokens.append(OBJECT_END)
             tokens.append(SEP)
+            segment_ids = [0] * len(tokens)
+
         num_tokens += len(tokens)
 
         if len(tokens) > max_seq_length:
@@ -185,7 +195,6 @@ def convert_examples_to_features(examples, label2id, max_seq_length, tokenizer, 
         else:
             num_fit_examples += 1
 
-        segment_ids = [0] * len(tokens)
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
         input_mask = [1] * len(input_ids)
         padding = [0] * (max_seq_length - len(input_ids))  
@@ -279,7 +288,7 @@ def evaluate(model, device, eval_dataloader, eval_label_ids, num_labels, verbose
         label_ids = label_ids.to(device)
         span_ids = span_ids.to(device)
         with torch.no_grad():
-            logits = model(input_ids, segment_ids, input_mask, labels=None, span_ids = span_ids)
+            logits = model(input_ids, input_mask, segment_ids, span_ids = span_ids,labels=None )
         loss_fct = CrossEntropyLoss()
         tmp_eval_loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
         eval_loss += tmp_eval_loss.mean().item()
@@ -442,7 +451,7 @@ def main(args):
                 for step, batch in enumerate(train_batches):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, label_ids, span_ids = batch
-                    loss = model(input_ids, segment_ids, input_mask, label_ids,span_ids)
+                    loss = model(input_ids, input_mask, segment_ids,span_ids ,label_ids)
                     if n_gpu > 1:
                         loss = loss.mean()
                     if args.gradient_accumulation_steps > 1:

@@ -169,6 +169,7 @@ class BertForMTB(BertPreTrainedModel):
         if not return_dict:
             output = (logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
+        # return (loss, logits)
         return SequenceClassifierOutput(
             loss=loss,
             logits=logits,

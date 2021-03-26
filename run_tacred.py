@@ -292,7 +292,7 @@ def evaluate(model, device, eval_dataloader, eval_label_ids, num_labels, verbose
         label_ids = label_ids.to(device)
         span_ids = span_ids.to(device)
         with torch.no_grad():
-            model_output = model(input_ids, input_mask, segment_ids, span_ids = span_ids,labels=None )
+            model_output = model(input_ids, input_mask, segment_ids, span_ids = span_ids,labels=None,output_attentions = True,output_hidden_states=True )
             logits = model_output.logits
         loss_fct = CrossEntropyLoss()
         tmp_eval_loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
@@ -458,7 +458,8 @@ def main(args):
                 for step, batch in enumerate(train_batches):
                     batch = tuple(t.to(device) for t in batch)
                     input_ids, input_mask, segment_ids, label_ids, span_ids = batch
-                    model_output = model(input_ids, input_mask, segment_ids,span_ids ,label_ids)
+                    model_output = model(input_ids, input_mask, segment_ids,span_ids ,label_ids,output_attentions = True,output_hidden_states=True)
+                    print(model_output)
                     loss = model_output.loss
                     if n_gpu > 1:
                         loss = loss.mean()

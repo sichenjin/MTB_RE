@@ -2,6 +2,8 @@ from pytorch_transformers.modeling_bert import BertPreTrainedModel
 from transformers import BertModel
 import torch
 import torch.nn as nn
+from torch.nn import CrossEntropyLoss
+
 from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.file_utils import (
     ModelOutput,
@@ -68,7 +70,9 @@ BERT_INPUTS_DOCSTRING = r"""
 class BertForMTB(BertPreTrainedModel):
     def __init__(self,config, model_name,examples,mode):
         print(mode)
+        self.mode = mode
         super().__init__(config)
+        # print(config)
         # super(BertForMTB, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel.from_pretrained(model_name)
@@ -106,7 +110,7 @@ class BertForMTB(BertPreTrainedModel):
             config.num_labels - 1]`. If :obj:`config.num_labels == 1` a regression loss is computed (Mean-Square loss),
             If :obj:`config.num_labels > 1` a classification loss is computed (Cross-Entropy).
         """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.bert(
             input_ids,
@@ -117,10 +121,10 @@ class BertForMTB(BertPreTrainedModel):
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
+            return_dict=True,
         )
         hidden_states = outputs.hidden_states
-        if mode == 'CLS':
+        if self.mode == 'CLS':
 
             # pooled_output = outputs[1]
             # pooled_output = self.dropout(pooled_output)
@@ -129,7 +133,7 @@ class BertForMTB(BertPreTrainedModel):
             logits = self.classifier(CLS_hidden_states)  #(batch size, hidden size) ->(batch size, label size)
             logits = self.softmax(logits)
 
-        elif mode == 'pooling':
+        elif self.mode == 'pooling':
             repre_hidden = []
             for  span_index,span_id in enumerate(span_ids):
                 maxpool1 = nn.MaxPool1d(span_id[0][1]- span_id[0][0] + 1)
@@ -170,6 +174,7 @@ class BertForMTB(BertPreTrainedModel):
             output = (logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
         # return (loss, logits)
+        print(loss)
         return SequenceClassifierOutput(
             loss=loss,
             logits=logits,
